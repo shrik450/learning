@@ -1,0 +1,496 @@
+#+TITLE: Phoenix in Action
+
+* Chapter 1
+
+- The big advantage of erlang processes over plain objects is that
+  BEAM contains a baked-in abstraction for talking to process across
+  nodes?
+- I already know this stuff about FP, was a good skim
+
+* Chapter 2
+
+- FizzBuzz
+
+#+begin_src elixir
+  defmodule FizzBuzz do
+    def go(min, max) do
+      Enum.each(min..max, &go/1)
+    end
+
+    def go(num) when rem(num, 15) == 0, do: IO.puts "fizzbuzz"
+    def go(num) when rem(num, 3) == 0, do: IO.puts "fizz"
+    def go(num) when rem(num, 5) == 0, do: IO.puts "buzz"
+    def go(num), do: IO.puts num
+  end
+
+  FizzBuzz.go(1, 100)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+[33mwarning: [0mredefining module FizzBuzz (current version defined in memory)
+  iex:1
+
+1
+2
+fizz
+4
+buzz
+fizz
+7
+8
+fizz
+buzz
+11
+fizz
+13
+14
+fizzbuzz
+16
+17
+fizz
+19
+buzz
+fizz
+22
+23
+fizz
+buzz
+26
+fizz
+28
+29
+fizzbuzz
+31
+32
+fizz
+34
+buzz
+fizz
+37
+38
+fizz
+buzz
+41
+fizz
+43
+44
+fizzbuzz
+46
+47
+fizz
+49
+buzz
+fizz
+52
+53
+fizz
+buzz
+56
+fizz
+58
+59
+fizzbuzz
+61
+62
+fizz
+64
+buzz
+fizz
+67
+68
+fizz
+buzz
+71
+fizz
+73
+74
+fizzbuzz
+76
+77
+fizz
+79
+buzz
+fizz
+82
+83
+fizz
+buzz
+86
+fizz
+88
+89
+fizzbuzz
+91
+92
+fizz
+94
+buzz
+fizz
+97
+98
+fizz
+buzz
+:ok
+#+end_example
+2
+fizz
+4
+buzz
+fizz
+7
+8
+fizz
+buzz
+11
+fizz
+13
+14
+fizzbuzz
+16
+17
+fizz
+19
+buzz
+fizz
+22
+23
+fizz
+buzz
+26
+fizz
+28
+29
+fizzbuzz
+31
+32
+fizz
+34
+buzz
+fizz
+37
+38
+fizz
+buzz
+41
+fizz
+43
+44
+fizzbuzz
+46
+47
+fizz
+49
+buzz
+fizz
+52
+53
+fizz
+buzz
+56
+fizz
+58
+59
+fizzbuzz
+61
+62
+fizz
+64
+buzz
+fizz
+67
+68
+fizz
+buzz
+71
+fizz
+73
+74
+fizzbuzz
+76
+77
+fizz
+79
+buzz
+fizz
+82
+83
+fizz
+buzz
+86
+fizz
+88
+89
+fizzbuzz
+91
+92
+fizz
+94
+buzz
+fizz
+97
+98
+fizz
+buzz
+:ok
+#+end_e
+
+- FizzBuzz, but with cond
+
+#+begin_src elixir
+  defmodule FizzBuzz do
+    def go(min, max), do: Enum.each(min..max, &go/1)
+    def go(num) do
+      cond do
+        rem(num, 15) == 0 -> IO.puts "FizzBuzz"
+        rem(num, 3) == 0 -> IO.puts "Fizz"
+        rem(num, 5) == 0 -> IO.puts "Buzz"
+        true -> IO.puts num
+      end
+    end
+  end
+
+  FizzBuzz.go(1, 100)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+[33mwarning: [0mredefining module FizzBuzz (current version defined in memory)
+  iex:1
+
+1
+2
+Fizz
+4
+Buzz
+Fizz
+7
+8
+Fizz
+Buzz
+11
+Fizz
+13
+14
+FizzBuzz
+16
+17
+Fizz
+19
+Buzz
+Fizz
+22
+23
+Fizz
+Buzz
+26
+Fizz
+28
+29
+FizzBuzz
+31
+32
+Fizz
+34
+Buzz
+Fizz
+37
+38
+Fizz
+Buzz
+41
+Fizz
+43
+44
+FizzBuzz
+46
+47
+Fizz
+49
+Buzz
+Fizz
+52
+53
+Fizz
+Buzz
+56
+Fizz
+58
+59
+FizzBuzz
+61
+62
+Fizz
+64
+Buzz
+Fizz
+67
+68
+Fizz
+Buzz
+71
+Fizz
+73
+74
+FizzBuzz
+76
+77
+Fizz
+79
+Buzz
+Fizz
+82
+83
+Fizz
+Buzz
+86
+Fizz
+88
+89
+FizzBuzz
+91
+92
+Fizz
+94
+Buzz
+Fizz
+97
+98
+Fizz
+Buzz
+:ok
+#+end_example
+
+- FizzBuzz case style
+
+#+begin_src elixir
+  defmodule FizzBuzz do
+    def go(min, max), do: Enum.each(min..max, &go/1)
+    def go(num) do
+      case {rem(num, 3), rem(num, 5)} do
+        {0, 0} -> IO.puts "FizzBuzz"
+        {0, _} -> IO.puts "Fizz"
+        {_, 0} -> IO.puts "Buzz"
+        _ -> IO.puts num
+      end
+    end
+  end
+
+  FizzBuzz.go(1, 100)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+[33mwarning: [0mredefining module FizzBuzz (current version defined in memory)
+  iex:1
+
+1
+2
+Fizz
+4
+Buzz
+Fizz
+7
+8
+Fizz
+Buzz
+11
+Fizz
+13
+14
+FizzBuzz
+16
+17
+Fizz
+19
+Buzz
+Fizz
+22
+23
+Fizz
+Buzz
+26
+Fizz
+28
+29
+FizzBuzz
+31
+32
+Fizz
+34
+Buzz
+Fizz
+37
+38
+Fizz
+Buzz
+41
+Fizz
+43
+44
+FizzBuzz
+46
+47
+Fizz
+49
+Buzz
+Fizz
+52
+53
+Fizz
+Buzz
+56
+Fizz
+58
+59
+FizzBuzz
+61
+62
+Fizz
+64
+Buzz
+Fizz
+67
+68
+Fizz
+Buzz
+71
+Fizz
+73
+74
+FizzBuzz
+76
+77
+Fizz
+79
+Buzz
+Fizz
+82
+83
+Fizz
+Buzz
+86
+Fizz
+88
+89
+FizzBuzz
+91
+92
+Fizz
+94
+Buzz
+Fizz
+97
+98
+Fizz
+Buzz
+:ok
+#+end_example
+
+- Charlists: =[71, 101, 111]= is represented as ='Geo'=, hmm.
+
+- You really can learn enough about elixir by just diving into
+  phoenix. A lot of the syntax and patterns are clear from just usage,
+  especially because phoenix is very explicit.
+
+* Chapter 3
