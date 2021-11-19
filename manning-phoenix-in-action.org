@@ -494,3 +494,186 @@ Buzz
   especially because phoenix is very explicit.
 
 * Chapter 3
+Most of this stuff isn't very different from how Rack/Rails works, and
+I have enough experience with that (and more low level YSAF w/ Giraffe
+and http4k) to grok it.
+
+* Chapter 4
+
+- Phoenix is not your application: This reminds me a lot of the
+  advantages of the Java way of layering, with every interaction being
+  through well defined interfaces: you can always replace each
+  individual element of your app if you have a reason to.
+
+#+begin_src elixir
+  defmodule Auction.Item do
+    defstruct ~w(id title description ends_at)a
+  end
+#+end_src
+
+#+RESULTS:
+: {:module, Auction.Item,
+:  <<70, 79, 82, 49, 0, 0, 7, 28, 66, 69, 65, 77, 65, 116, 85, 56, 0, 0, 0, 201,
+:    0, 0, 0, 19, 19, 69, 108, 105, 120, 105, 114, 46, 65, 117, 99, 116, 105, 111,
+:    110, 46, 73, 116, 101, 109, 8, 95, 95, ...>>,
+:  %Auction.Item{description: nil, ends_at: nil, id: nil, title: nil}}
+
+#+begin_src elixir
+  alias Auction.Item
+
+  book = %Item{
+    id: 1,
+    title: "Phoenix in Action",
+    description: "Learn Phoenix with...",
+    ends_at: ~N[2021-11-19 09:56:28]
+  }
+#+end_src
+
+#+RESULTS:
+: %Auction.Item{
+:   description: "Learn Phoenix with...",
+:   ends_at: ~N[2021-11-19 09:56:28],
+:   id: 1,
+:   title: "Phoenix in Action"
+: }
+
+- In memory database: I remember building exactly this for Flipkart's
+  MC round, excpet that was in ruby :P
+
+#+begin_src elixir
+  defmodule Auction do
+    alias Auction.{FakeRepo, Item}
+
+    @repo FakeRepo
+
+    def list_items do
+      @repo.all(Item)
+    end
+
+    def get_item(id) do
+      @repo.get!(Item, id)
+    end
+
+    def get_item_by(attrs) do
+      @repo.get_by(Item, attrs)
+    end
+  end
+#+end_src
+
+#+RESULTS:
+: {:module, Auction,
+:  <<70, 79, 82, 49, 0, 0, 6, 224, 66, 69, 65, 77, 65, 116, 85, 56, 0, 0, 0, 225,
+:    0, 0, 0, 21, 14, 69, 108, 105, 120, 105, 114, 46, 65, 117, 99, 116, 105, 111,
+:    110, 8, 95, 95, 105, 110, 102, 111, 95, ...>>, {:get_item_by, 1}}
+
+This is fairly complex, hmm.
+
+#+begin_src elixir
+  defmodule Auction.FakeRepo do
+    alias Auction.Item
+
+    # Copied and pasted as-is from the book.
+    @items [
+      %Item{
+        id: 1,
+        title: "My first item",
+        description: "A tasty item sure to please",
+        ends_at: ~N[2020-01-01 00:00:00]
+      },
+      %Item{
+        id: 2,
+        title: "WarGames Bluray",
+        description: "The best computer movie of all time, now on Bluray!",
+        ends_at: ~N[2018-10-15 13:39:35]
+      },
+      %Item{
+        id: 3,
+        title: "U2 - Achtung Baby on CD",
+        description: "The sound of 4 men chopping down The Joshua Tree",
+        ends_at: ~N[2018-11-05 03:12:29]
+      }
+    ]
+
+    def all(Item), do: @items
+
+    def get!(Item, id) do
+      Enum.find(@items, fn (item) -> item.id == id end)
+    end
+
+    def get_by(Item, attrs) do
+      Enum.find(@items, fn (item) ->
+        Enum.all?(Map.keys(attrs), fn (key) ->
+          Map.get(item, key) === attrs[key]
+        end)
+      end)
+    end
+  end
+#+end_src
+
+#+RESULTS:
+: [33mwarning: [0mredefining module Auction.FakeRepo (current version defined in memory)
+:   iex:1
+:
+: {:module, Auction.FakeRepo,
+:  <<70, 79, 82, 49, 0, 0, 12, 84, 66, 69, 65, 77, 65, 116, 85, 56, 0, 0, 1, 55,
+:    0, 0, 0, 33, 23, 69, 108, 105, 120, 105, 114, 46, 65, 117, 99, 116, 105, 111,
+:    110, 46, 70, 97, 107, 101, 82, 101, 112, ...>>, {:get_by, 2}}
+
+#+begin_src elixir
+Auction.list_items
+#+end_src
+
+#+RESULTS:
+#+begin_example
+[
+  %Auction.Item{
+    description: "A tasty item sure to please",
+    ends_at: ~N[2020-01-01 00:00:00],
+    id: 1,
+    title: "My first item"
+  },
+  %Auction.Item{
+    description: "The best computer movie of all time, now on Bluray!",
+    ends_at: ~N[2018-10-15 13:39:35],
+    id: 2,
+    title: "WarGames Bluray"
+  },
+  %Auction.Item{
+    description: "The sound of 4 men chopping down The Joshua Tree",
+    ends_at: ~N[2018-11-05 03:12:29],
+    id: 3,
+    title: "U2 - Achtung Baby on CD"
+  }
+]
+#+end_example
+
+#+begin_src elixir
+Auction.get_item(2)
+#+end_src
+
+#+RESULTS:
+: %Auction.Item{
+:   description: "The best computer movie of all time, now on Bluray!",
+:   ends_at: ~N[2018-10-15 13:39:35],
+:   id: 2,
+:   title: "WarGames Bluray"
+: }
+
+#+begin_src elixir
+Auction.get_item(20)
+#+end_src
+
+#+RESULTS:
+: nil
+
+#+begin_src elixir
+Auction.get_item_by(%{title: "WarGames Bluray"})
+#+end_src
+
+#+RESULTS:
+: %Auction.Item{
+:   description: "The best computer movie of all time, now on Bluray!",
+:   ends_at: ~N[2018-10-15 13:39:35],
+:   id: 2,
+:   title: "WarGames Bluray"
+: }
