@@ -1,0 +1,56 @@
+#+TITLE: The Scala Book
+#+SUBTITLE: Taken from https://docs.scala-lang.org/scala3/book/
+
+* A Taste of Scala
+
+/Note: Since I'm using amm instead of scala3, some things are/
+/different./
+
+** Hello, World!
+
+#+begin_src scala
+println("Hello, world!")
+#+end_src
+
+#+RESULTS:
+: Hello, world!
+
+This takes a bit longer than I'd like, but afaik amm has to load the jvm,
+compile and then runs, which of course takes time.
+
+** The REPL
+#+begin_src scala
+println(1 + 1)
+
+println(2 + 2)
+#+end_src
+
+#+RESULTS:
+: 2
+: 4
+
+#+begin_src scala
+1 + 1
+
+println(res0 * 10)
+#+end_src
+
+#+RESULTS:
+Doesn't compile. Well, that's what I get for using amm.
+
+** Types of Variables
+
+#+begin_src scala
+val msg = "Hello, world!"
+
+msg = "Hello again!"
+#+end_src
+
+#+RESULTS:
+: Compiling /tmp/babel-XpZzkF/scala-T9oHNi
+:   |val res_1 = msg = "Hello again!"
+:   |            ^^^^^^^^^^^^^^^^^^^^
+:   |            Reassignment to val msg
+: Compilation Failed
+
+I had to put that in there manually.
