@@ -23,7 +23,7 @@
     def go(num), do: IO.puts num
   end
 
-  FizzBuzz.go(1, 100)
+  FizzBuzz.go(1, 50)
 #+end_src
 
 #+RESULTS:
@@ -80,56 +80,6 @@ fizzbuzz
 47
 fizz
 49
-buzz
-fizz
-52
-53
-fizz
-buzz
-56
-fizz
-58
-59
-fizzbuzz
-61
-62
-fizz
-64
-buzz
-fizz
-67
-68
-fizz
-buzz
-71
-fizz
-73
-74
-fizzbuzz
-76
-77
-fizz
-79
-buzz
-fizz
-82
-83
-fizz
-buzz
-86
-fizz
-88
-89
-fizzbuzz
-91
-92
-fizz
-94
-buzz
-fizz
-97
-98
-fizz
 buzz
 :ok
 #+end_example
@@ -607,6 +557,10 @@ This is fairly complex, hmm.
         end)
       end)
     end
+
+    def get_first(Item) do
+      Enum.first @items
+    end
   end
 #+end_src
 
@@ -615,9 +569,9 @@ This is fairly complex, hmm.
 :   iex:1
 :
 : {:module, Auction.FakeRepo,
-:  <<70, 79, 82, 49, 0, 0, 12, 84, 66, 69, 65, 77, 65, 116, 85, 56, 0, 0, 1, 55,
-:    0, 0, 0, 33, 23, 69, 108, 105, 120, 105, 114, 46, 65, 117, 99, 116, 105, 111,
-:    110, 46, 70, 97, 107, 101, 82, 101, 112, ...>>, {:get_by, 2}}
+:  <<70, 79, 82, 49, 0, 0, 13, 64, 66, 69, 65, 77, 65, 116, 85, 56, 0, 0, 1, 71,
+:    0, 0, 0, 35, 23, 69, 108, 105, 120, 105, 114, 46, 65, 117, 99, 116, 105, 111,
+:    110, 46, 70, 97, 107, 101, 82, 101, 112, ...>>, {:get_first, 1}}
 
 #+begin_src elixir
 Auction.list_items
@@ -677,3 +631,11 @@ Auction.get_item_by(%{title: "WarGames Bluray"})
 :   id: 2,
 :   title: "WarGames Bluray"
 : }
+
+#+begin_src elixir
+  Auction.FakeRepo.get_first(Item)
+#+end_src
+
+#+RESULTS:
+: ** (UndefinedFunctionError) function Enum.first/1 is undefined or private
+:     (elixir 1.12.3) Enum.first([%Auction.Item{description: "A tasty item sure to please", ends_at: ~N[2020-01-01 00:00:00], id: 1, title: "My first item"}, %Auction.Item{description: "The best computer movie of all time, now on Bluray!", ends_at: ~N[2018-10-15 13:39:35], id: 2, title: "WarGames Bluray"}, %Auction.Item{description: "The sound of 4 men chopping down The Joshua Tree", ends_at: ~N[2018-11-05 03:12:29], id: 3, title: "U2 - Achtung Baby on CD"}])
