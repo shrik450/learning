@@ -1,0 +1,206 @@
+#+TITLE: HBase Training Notes
+* Intro
+  - Hbase is a NoSQL database for big data.
+  - Its storage architecture is very similar to other NoSQL dbs
+  - Hbase is a key-value raw store
+  - Use Phoenix on top of HBase as a more egonomic access layer.
+* NoSQL
+  - Common setup: relational + cache
+  - Locks are expensive, this caused spikes to tank performance
+  - Two companies which ushered in NoSQL: Google (via BigTable,
+    Dremel, ZFS (?)) and Amazon (DynamoDB)
+  - HBase is OSS BigTable, Cassandra is OSS Dynamo
+** Issues with common setup
+   - Not designed to be scaled
+   - Locks are expensive and reading needs locks
+   - Sharding
+** NoSQL & Why
+   - Non relational
+   - Relax some of ACID CAP theorem coming up
+   - Dynamic langs and dynamic schema
+   - Revolutionary for the time sotrage arch
+   - Large datasets + acceptance of dynamic types
+** Storage Arch
+   - Random IO is the bottleneck for RDBMS
+   - Disk read/write ahead optimizes sequential reads/writes
+   - Random IO requires seeks which are 10^2 slower than sequential
+     read
+   - Random IO pays the latency of the disk every time
+   - Locking is prohibitivelye expensive
+   - b trees are bad for writes
+*** Lock-free Logs - CAS (Compare - and - Set)
+    - =AtomicInteger= in Java for lock-free changes
+    - This is like CRDTs
+    - =CAS(memadd, exv, newv)= - if val at =memadd= is =exv= change it
+      to =newv=. =cmpxchg=
+    - This is hardware backend and cheaper than a software lock.
+    - "spinning" - retrying after failure to update due to CAS. Still
+      faster than locking.
+    - Window times ~25-30ns for the instruction (compare w/ ~100-200ms
+      for OS)
+*** XADD - Wait free
+    - this instruction takes only a \Delta change
+    - This just adds and returns the previous value
+    - order of 3-4x faster than even CAS.
+*** Log File
+**** Memory mapped file (mmap)
+     - Normal files: Heap -> JVM Heap -> Buffer -> Disk
+     - Mmap: Direct to the Buffer.
+**** Wlog
+     - An atomic long controls where the write happens
+     - =wlog_entry(e)= -> gives you the address of where to write and
+       leaves the required length available to you. This is basically
+       just a counter.
+     - Essentially, an array you ask for space in, and using XADD it
+       always gives you space that's guaranteed free.
+     - This solves /both/ locks and random writes - all writes are
+       sequential after all!
+     - The log isn't the be-all, end-all - the data can't be searched
+       etc.
+*** Storage
+    - In Memory Skiplist Map (IMSM)
+    - WAL is only for order of arrival handling
+**** Regular DB
+     - B+ Tree in disk
+     - Each branch has multiple items
+     - Binary tree in disk leads to way too many seeks, hence B+.
+     - O(nlogm) - n fanout, m total size / fanout (BUT ONLY WHEN
+       WRITING)
+     - Writing requires acquiring lock -> seek to pos -> edit ->
+       rebalance, and now lock timings dominate.
+     - Two problems: B+ writes, random writes, bigger than memory
+       file.
+**** NoSQL
+***** Skip List Intro
+      - Binary tree, but not a regular old binary tree.
+      - No-lock b tree (lol)
+      - If I were a RDBMS author, I would simply use a no-lock b tree.
+      - It's a trie? No I misunderstand tries.
+      - roughly half splits for locations
+      - Use CAS for lock free changes but requires retries.
+      - Consider a link list with more link lists above it that
+        stategically point to certain points at roughly half splits.
+      - 1 -> 2 -> 3 -> 4 -> 5, adding 4.3 and 4.7
+***** Reindexing
+      - Each thread does a random check, if true it adds to the upper
+        index, otherwise it doesn't.
+      - It maintains the "roughly half" structure.
+      - Very wait free
+      - =ConcurrentSkipListMap=, doesn't need a lock!
+      - Why not HashMap? Need to support point to point query
+        i.e. ranges and the like.
+*** The full picture
+    - First add an incoming row to the WAL by breaking it down into cells
+    - Each property being changed takes one cell =id:field:timestamp:value=
+    - These cells are then moveed into the IMSM, where it gets sorted
+      and is ready to sort.
+    - The IMSM is stored into the disk when it becomes full.
+    - Updates are just stored into the IMSM and then reconciled.
+    - System crashes are recovered by replaying the WAL.
+    - You can configure HBase to handle WAL -> IMSM async for higher
+      throughput / lower latency.
+**** Cell Style Storage
+     - As mentioned in [[*The full picture][The full picture]], data is stored in both the
+       WAL and the IMSM in cells, not as rows or recrds.
+     - The IMSM in memory is called the "mem store".
+     - Check the IMSM for the key, then in reverse order of TS.
+     - This ensures you don't have to take locks to update data.
+     - The disk storage is called HFile.
+** Cluster Architecture
+   - Master - region servers.
+   - Region servers are on different physical nodes.
+   - Each "table" is split across different regions, with each region
+     having a shard.
+   - There's an index for the distributed data, that lists the
+     start:end range of keys on each shard.
+   - Each region servers has different regions with each having a mem
+     store for the entire column family with multiple store HFiles.
+   - There's a single WAL for the entire region server.
+   - Zookeper holds the distributed index.
+   - The region server holds the memstores
+   - The Data node holds the WAL, stores and files
+   - Region Server + Data Node = Physical Node
+** CAP
+   - Consistency - Availability - Partition Tolerance: Pick Two
+   - CA: RDBMS
+   - AP: Cassandra, Dynamo, Riak
+   - CP: Hbase, Mongo, Redis
+   - My database is consistent, available and partition tolerant - no
+     cap ;)
+*** HBase's CAP tradeoff
+    - HBase gives up on Always Availability for Consistency.
+    - HBase leaves durability of the disk data to the HDFS system.
+    - HDFS data is replicated (usually) thrice.
+    - If a region server goes down, those keys will become unavailable
+      until a new region server pops up and serves that data.
+    - There's no redundant storage within HBase itself to maintain
+      consistency.
+      - Serving writes from two nodes at once could lead to
+        inconsitent data until reconciliation.
+*** Cassandra
+    - Cassandra stores data based on a replication factor in multiple
+      nodes w/ a peer2peer arch.
+    - If multiple writes come in, the node can try to reconcile, but
+      the answer may never be consistent as a write can come in during
+      reconciliation.
+    - Graceful degradation of performance if nodes go down, but
+      reads/writes are always present for all keys.
+    - Even if a node doesn't have data about a key, it can accept a
+      write req and passes it on to a node that does.
+    - Developed at FB.
+* Data Model
+  - BigTable is sparse - keys can be sparse due to the cell storage.
+  - Indexed by row x column x timestamp
+  - Master/Slave architecture, with the master node as a single point
+    of failure.
+    - The master handles crashes and automatic partitioning. Not used
+      for r/w at all.
+    - HBase3: Replace Zookeper with the master.
+  - Sine tables are across files, joins are especially bad for perf.
+** Column Families
+   - The more columns you have, the more cells you have to traverse
+     per row, so you should minimize the number of columns.
+   - You can optimize by splitting columns across files using "column
+     families" - if the majority of your queries use 5/10 columns
+     splitting them into two files can improve perf. (Data oriented
+     design, wow)
+   - Columns can be added/removed without changing the schema because
+     it's just about adding cells.
+* HBase Operations internals
+** Scanner
+   - =cellScanner()= gives the row as cells.
+   - HBase only ever stores things as bytes.
+   #+begin_src java
+     Put put = new Put(Bytes.toBytes("testRow"));
+     put.addColumn(Bytes.toBytes("fam-1"), Bytes.toBytes("qual-1"),
+                   Bytes.toBytes("val-1"));
+     //                          family                   col
+     put.addColumn(Bytes.toBytes("fam-1"), Bytes.toBytes("qual-2"),
+                   Bytes.toBytes("val-2"));
+     //                          value
+     CellScanner scanner = put.cellScanner();
+     while (scanner.advance()) {
+         Cell cell = scanner.current();
+         System.out.println("Cell: " + cell);
+     }
+   #+end_src
+   - Column Family has to be specified at creation and used for every
+     insert
+** Data Versioning
+   - When creating a table, you can specify the number of versions to
+     keep
+     #+begin_src sql
+       create 'test', { NAME => 'cf1', VERSIONS => 3 }
+       put 'test', 'row1', 'cf1', 'val1'
+       put 'test', 'row1', 'cf1', 'val2'
+       scan 'test', { VERSIONS => 3 }
+       -- row1 value=val2;
+       -- row2 value=val1;
+     #+end_src
+** Client Connections
+   - When the colume of writes is v. high, you can skip the memstores.
+* Stray Notes
+  - Compacting to remove duplicates in the data. This doesn't block as
+    much as possible because reads can go on unhindered from the
+    existing files while writes go to the memstore.
+  - Deletes are via tombstones.
