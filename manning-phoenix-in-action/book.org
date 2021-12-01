@@ -640,7 +640,3 @@
 #+RESULTS:
 : ** (UndefinedFunctionError) function Enum.first/1 is undefined or private
 :     (elixir 1.12.3) Enum.first([%Auction.Item{description: "A tasty item sure to please", ends_at: ~N[2020-01-01 00:00:00], id: 1, title: "My first item"}, %Auction.Item{description: "The best computer movie of all time, now on Bluray!", ends_at: ~N[2018-10-15 13:39:35], id: 2, title: "WarGames Bluray"}, %Auction.Item{description: "The sound of 4 men chopping down The Joshua Tree", ends_at: ~N[2018-11-05 03:12:29], id: 3, title: "U2 - Achtung Baby on CD"}])
-
-* Chapter 5
-  All the code from now needs to be in an app so no more code blocks
-  here, unless they're small enough.
