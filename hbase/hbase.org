@@ -199,8 +199,147 @@
      #+end_src
 ** Client Connections
    - When the colume of writes is v. high, you can skip the memstores.
+   - The =Connection= class isn't threadsafe, you should create a new
+     connection for each thread.
+** Buffered Mutations
+   - Avoid making one RPC per mutation, use a =BufferedMutator= instead.
+   - =Put= -> one RPC per mutation.
+   - =PutList=
+     - Batches but does not sort internally
+     - The issue here is that you have to maintain connections to all
+       region servers because your mutations can hit all of them.
+   - =BufferedMutator=
+     - The buffered mutator does a local sort on the client based on
+       the global index data it gets from the master, and then hits
+       the right region server for each set of puts that require that
+       RS.
+     - So it hits each region server only when required.
+     - This is the optimal way to mutate.
+     - If any of them fails, gives you an exception specifically for
+       the ones which failed.
+** Atomics
+   - =checkAndPut= - makes a put if the check passes atomically.
+   - What about upserts?
+   - I just realized that a put by default should be an upsert, it
+     shouldn't actually check if the row is not present.
+   - =checkAndMutate=
+** Useful Methods
+   - max results per column family
+   - set / get nearest before
+   - append to same value
+* More on the Storage
+  - "If we're storing across files and the memstore, do we need to go
+    through all of them to get a row?"
+** Sequence Files
+   - A binary file format
+   - Header - comparison, keytype, valuetype
+   - Sync - marks the start of a block of variable length
+   - Block
+     - Number of records
+     - Compressed length
+     - Compressed keys
+     - Compressed value length
+     - Compressed values
+   - Header - Sync - Block - Sync - Block - Sync ...
+   - Compressed keyvalue store, essentially. Compression ratio on keys
+     generally higher than on values.
+** Map File
+   - Two sequence files: Index and Data file.
+   - Both files are sorted by key
+   - Index files stores the key to block id in data file
+   - Index file can be cached in mem all the time.
+   - Bin search on Index in memory -> seek to the right sequential
+     blocks in disk on the data file. (they keys are sorted so your
+     requirements are either range queries or id queries)
+   - HFile has the index and the data in the same file.
+** Caching
+   - Each Region Server has a block cache which reatins recentlya
+     ccessed data for contiguous info.
+   - =setCacheBlocks= and =getCacheBlocks= to control the caching
+   - not a silver bullet, for random reads avoid cache churn
+** Scans and Filters
+   - Scan checks the entire range starting after your start and until
+     your end
+   - Filter scans and then removes data that matches; will still read
+     every row
+   - =ComparisonFilter= to keep rows that match
+   - There's a lot of filters.
+   - Covered Indexes: an index where all the required information is
+     in the key. Use a =KeyOnlyFilter= to scan for these.
+     - The key only filter can also return the length as the value.
+* Phoenix
+  - Not the elixir one; Apache Phoenix.
+  - The phoenix shell is an SQL wrapper over HBase;
+  - Designed by salesforce, huh
+  - Sql -> Phoenix -> HBase API calls like Put, Get, Scan etc.
+  - The phoenix client plans the query, hits the HBase API, which then
+    hits a Phoenix coprocessor on each region server before reaching
+    into HDFS.
+    - The coprocessor is necessary for the things like secondary
+      indexes that Phoenix supports.
+  - Supports:
+    1. Transactions* (shouldn't be using HBase directly elsewhere)
+    2. UDFs
+    3. Some other stuff
+    4. Secondary indexes (not ACID compliant)
+    5. Views* (some limitations)
+    6. Constraints (=NOT NULL=) - only on pkey.
+  - Phoenix Query Server: allows clients not speaking java to use an
+    intermediary server to run Phoenix queries.
+  - NEVER JOIN on phoenix. Since the data is sharded, joins will
+    easily spill over region servers and have insane latency.
+** Secondary Indexes
+   - Useful when you can't just shove every access pattern into the
+     key
+   - Skip scans: I didn't get this
+** Reading
+   - Plans the query based on available knowledge of indexes
+   - Finds optimal plan
+   - executes scans  parallelly using an =ExecutorService= pool
+   - Results are merged on the client, which can lead to OOM in some
+     cases on the client.
+   - Writes are just converted into Put (didn't need a new section for
+     this)
+** Salted Tables
+   - Consider the hotspotting case as discussed in [[*Use Cases][Use Cases]] - Time
+     series data.
+   - The effect seems to have been to spread the rows across regions.
+* Use Cases
+  - Search Indexes
+  - Time series data
+    - If the key is just the timestamp, it hotspots the writes into
+      one region server because sharding is by key
+    - So the key should be prefixed by something else to distribute
+      the writes more evenly.
+* Cases
+** Image Search
+*** Text Search
+    - Works by reverse indexing
+    - Tokenization and stop word removal
+    - Lucene (I always mix this up with Lucerne)
+    - ES: Multiple lucene
+    - Lucene + Hbase: Lucene indexes into HBase - distributed store +
+      fast access.
+    - Sample key: =contents|boat= <- allows searching by "content:
+      boat" super quickly.
+*** Onto Images
+    - Calculate pattern of image and store it in the key for quick access
+    - The file itself can be sorted in HDFS, with another index that
+      keeps track of the position.
+    - Since the seqfile is essentially a key - value store, you don't
+      need to store position and offset - you can find the image by
+      key.
 * Stray Notes
   - Compacting to remove duplicates in the data. This doesn't block as
     much as possible because reads can go on unhindered from the
     existing files while writes go to the memstore.
   - Deletes are via tombstones.
+  - The storage arch is backed by hdfs, which can have bad latency,
+    but the actual bottleneck is the memstorea, and you need to
+    configure it appropriately to avoid running into hdfs limits.
+  - HBase vs Cassandra comes down to HBase's usage of HDFS as the
+    generic distribute filesystem, while Cassandra takes care of
+    replication itself. Cassandra can be tuned to be Consistent.
+  - Only the column families has to be predefined, actual columns can
+    be added whenever and as you want.
+  - Cassandra natively supports secondary indexes :thinking:
