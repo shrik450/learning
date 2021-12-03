@@ -148,6 +148,14 @@
     - Even if a node doesn't have data about a key, it can accept a
       write req and passes it on to a node that does.
     - Developed at FB.
+** MVCC locks
+   - Row level locks when multiple agents are trying to update the
+     same row.
+   - Multi version concurrency control
+   - Obtain row lock -> write to WAL -> Update memstore -> release row lock.
+   - Doesn't affect reads.
+   - Keeps a write number which is updated when lock is release
+   - Reads always pick up the latest complete write number.
 * Data Model
   - BigTable is sparse - keys can be sparse due to the cell storage.
   - Indexed by row x column x timestamp
@@ -268,7 +276,7 @@
      in the key. Use a =KeyOnlyFilter= to scan for these.
      - The key only filter can also return the length as the value.
 * Phoenix
-  - Not the elixir one; Apache Phoenix.
+  - Not the elixir one; Apache Phoenix.dd
   - The phoenix shell is an SQL wrapper over HBase;
   - Designed by salesforce, huh
   - Sql -> Phoenix -> HBase API calls like Put, Get, Scan etc.
@@ -304,6 +312,105 @@
    - Consider the hotspotting case as discussed in [[*Use Cases][Use Cases]] - Time
      series data.
    - The effect seems to have been to spread the rows across regions.
+   - Not always necessary; it affects your read speeds.
+   - You can add a rowkeyorder config to make phoenix sort, because
+     the order is perturbed by the salting.
+   - This is not always better. Do it only if:
+     1. Your writes are hotspotting because of a monotonically
+        increasing key;
+     2. That's a problem, because the server is getting overwhelmed;
+        and
+     3. The data is not read sequentially, as that is better served by
+        keeping close data in the same region server.
+   - Salting: Prepend two bytes of the hash to the key.
+   - Bucketing: Create n paritions of the data. This is fixed -
+     changing it involves rehashing everything.
+   - Salt then bucket: key gets perturbed for more even utilization of
+     region servers.
+   - No. of buckets != No. of region servers, buckets are spread
+     across servers
+   - Not "consistent hashing"
+   - Phoenix does the sorting, and transparently adds and removes the
+     prefix from the key.
+** Column Families
+   - Phoenix support for HBase Col Families.
+   - Again, only for specific purposes.
+   - Data oriented, not design oriented.
+** Good Ol' SQL stuff
+   - =WHERE=, =HAVING=, =JOIN= and =ORDER BY= are all supported but they all
+     have costs associated due to the data/cluster arch.
+   - Bucketed SortMerge joins vs Broadcast Joins
+   - You can hint to the engine which type of join you want
+   - EXPLAIN to ginf what it goes for.
+*** Joins, Streaming
+    - Also called a Sort Merge Join
+    - Done using MapRed
+    - Shuffle and Sort via MapReduce - expensive.
+    - Runs a map on every region server with the data to generate a
+      key-value, where the key is (id, table)
+    - 60% of mem in the RS has to be reserved for the MR
+*** Broadcast Join / Hash Join
+    - Look at the smaller side and combine it in one place.
+    - If it fits inside memory, broadcast it to all systems
+    - Doesn't work if both sides are large.
+    - The other side is calculated from the table in memory.
+** Sparking Phoenix
+   - HBase for pure storage and Spark for pure compute
+   - Also useful as you can OOM from client side merges if you use a
+     plain java client, better merge in Spark instead.
+   - Still uses phoenix, but only on the HBase server side.
+*** Joins in Spark and Phoenix
+**** Pagerank example
+     - Process:
+       1. Each page has initial rank 1
+       2. Each page contributes rank / |neighbors| to its neighbors
+       3. Set rank to 0.15 * 0.85 * contrib
+       4. Loop from 2 until stability.
+     - Naturally, over a large dataset like the entire web, this has
+       to be optimized to work well.
+**** Spark Joins
+     - Structure:
+       - Rank is one side/table
+       - Link is one side/table
+     - Spark can colocate and copartition the keys w/ special
+       operators - =mapValues=
+
+       (See: Spark Internals-2.pdf, slides 33-)
+     - This pushes shuffles to be run only when required.
+     - Practically worse on the lab system :)
+**** More
+     - By default, Phx+Spark still goes for a broadcast join if
+       possible (it's faster than the spark join)
+       - You can configure using the broadcast join threshold.
+     - You can also save the intermediary tables as Spark managed
+       tables
+** More Join stuff
+   - Semi/anti joins are automatically used when it's optimal (like
+     for =EXISTS= clauses)
+** Secondary Indexes
+   - You can't just make a good ol' B+ tree like on RDBMS because the
+     data is spread out.
+   - So you have an index table on HBase that's also a distributed.
+   - Phoenix keeps the secondary index in sync - this adds a cost to
+     updates.
+     - The coprocessor allows hooks into WAL events which allows the
+       framework to queue up index changes.
+   - Making a table append-only makes it cheaper to index.
+   - The phoenix query planner automatically uses indexes when
+     available.
+   - Spark doesn't always work well with phoenix indexes and you have
+     to work around that.
+     - Generally it's supposed to /push the predicate down/.
+     - Doesn't happen with timestamps - convert to a number instead.
+     - This is a bug, not intentional.
+   - Mongo benchmarks indexes to find out which one is faster for a
+     search.
+   - You can also make functional indexes.
+*** Global & Local Index tables
+    - For each index, you'll be making a write to update it.
+    - "global" indexes - default - indexes are across the whole table -
+      makes reading easy.
+    - Local indexes maintain a region-wise index
 * Use Cases
   - Search Indexes
   - Time series data
@@ -311,7 +418,7 @@
       one region server because sharding is by key
     - So the key should be prefixed by something else to distribute
       the writes more evenly.
-* Cases
+* Case Studies
 ** Image Search
 *** Text Search
     - Works by reverse indexing
@@ -329,6 +436,74 @@
     - Since the seqfile is essentially a key - value store, you don't
       need to store position and offset - you can find the image by
       key.
+** As a Centralized Lookup Store
+   - As a replacement for Redis
+   - <1GB Data
+   - Shouldn't use HBase for this.
+   - But what if we want to avoid adding a Redis data store? We
+     already have an HBase installation.
+   - Most of the time HBase will work fine, but there could be latency
+     spikes from occassional issues.
+   - Depends on your target latency percentile. 0.1% of the time if
+     the latency is ~1s and that's not OK, don't use HBase
+   - Ex: if there's a GC happening/ region or master crash.
+** OpenTSDB
+   - Data is sorted by timestamp all the time.
+   - Used for metrics and observability hence the key /has/ to be
+     sorted.
+   - Hotspotting is a major concern.
+   - Only one table and only one Colfamn.
+   - Their key: |metric|time|tagk|tagv|
+   - Time normalized over the hour.
+   - This leads to lots of metrics for the same hour stored in the
+     same row.
+* Tuning
+** Regions/store
+  - HBase is meant to run with a small number of regions (20-200) per
+    server.
+  - This is partly because 2MB of RAM is used per region memstore
+    for metadata, so with ~1k memstores you're already hitting
+    gigabytes of wasted RAM.
+  - Plus, if each memstore has only a few MB of memory you're
+    spilling to disk all the time.
+  - This is also hard for the master to keep up with as it gets heavy
+    on the zookeeper storage.
+** Memory
+   - Compute + Storage if you're not using spark
+   - If using spark, almost purely for storage.
+   - Formula for allocation:
+   #+begin_quote
+   RegionSize/MemstoreSize * ReplicationFactor * HeapFraction for
+   memstores
+   #+end_quote
+   - So for 10T of raw disk you need to allocate ~107GB. (3.3Tb
+     effective, 10GB regions ~338 regions. 128 * 338 / 0.4)
+** ColFams
+   - 2-3 column fam is about the most.
+   - Flushing is on a per region basis -> neighboring column families
+     also get spilled.
+   - So cardinality also has to be evenly balanced, as a high
+     cardinality family will make mass scans on other colfams slower.
+** Keys and Hotspotting
+   Covered in [[*OpenTSDB][OpenTSDB]].
+   - Column names should be short as well.
+   - Manual splits have to be careful. Consider string keys, if you
+     split based on hex values large gaps can appear in them.
+     - If your strings store hex data in them, the vast majority of
+       the string space can't appear, and HBase's partitioning will
+       hotspot.
+   - Tall v Wide v Middle
+     - Rows or versioning? Preference: Rows. Keep the timestamp in the
+       rowkey, esp. if there's a lot of versions.
+** Latency
+   - Normal RTT is ~ms based on etwork RTT _ disk speeds.
+   - Client retries can occur when HBase is rebalancing data.
+   - GC latency  - ~50ms most times, 2s at most.
+   - Server loss latency - ~minutes
+   - Writes overwhelming the memstore
+   - Data locality issues - no longer matters as much as network
+     speeds and latencies are pretty low.
+     - Cache locality still matters.
 * Stray Notes
   - Compacting to remove duplicates in the data. This doesn't block as
     much as possible because reads can go on unhindered from the
@@ -343,3 +518,6 @@
   - Only the column families has to be predefined, actual columns can
     be added whenever and as you want.
   - Cassandra natively supports secondary indexes :thinking:
+  - =hbase htop= : top but for hbase.
+  - When you need extremely low latency, you should use off-heap
+    memory - the GC doesn't know about it.
