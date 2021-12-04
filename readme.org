@@ -1,0 +1,21 @@
+#+TITLE: Learning in Public
+
+Stuff that I'm learning, have learnt and want to learn. Right now,
+it's mostly tech, but that won't necessarily hold true forever.
+
+* Structure
+There's a [[https://github.com/shrik450/learning/projects/1][project board]] where I keep track of what's going on. Each
+"thing" I'm learning - a book, a concept, a training session - has its
+own issue and its status is tracked on the project board.
+
+Further, for stuff that I learn, I'll be keeping notes in the org-mode
+format. Each "unit" belongs in a folder containing one major org file,
+which keeps my notes and, if possible, code.
+
+In the issues, I'll be trying to keep track of /what/ I want to learn
+and finally posting what I gained and whether that matched what I
+expected.
+
+If you're not me (unlikely as it is) please don't create issues or
+whatever. If you have a suggestion, please send it to me on twitter
+(@shrikanthup) or email!
