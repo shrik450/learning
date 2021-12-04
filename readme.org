@@ -3,6 +3,11 @@
 Stuff that I'm learning, have learnt and want to learn. Right now,
 it's mostly tech, but that won't necessarily hold true forever.
 
+This is specifically /formal/ learning. Of course, you never stop
+learning, and there's too much of that to track. This is about the
+stuff I'm making a special effort to learn via books, courses and the
+like.
+
 * Structure
 There's a [[https://github.com/shrik450/learning/projects/1][project board]] where I keep track of what's going on. Each
 "thing" I'm learning - a book, a concept, a training session - has its
