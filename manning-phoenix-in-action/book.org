@@ -640,3 +640,50 @@
 #+RESULTS:
 : ** (UndefinedFunctionError) function Enum.first/1 is undefined or private
 :     (elixir 1.12.3) Enum.first([%Auction.Item{description: "A tasty item sure to please", ends_at: ~N[2020-01-01 00:00:00], id: 1, title: "My first item"}, %Auction.Item{description: "The best computer movie of all time, now on Bluray!", ends_at: ~N[2018-10-15 13:39:35], id: 2, title: "WarGames Bluray"}, %Auction.Item{description: "The sound of 4 men chopping down The Joshua Tree", ends_at: ~N[2018-11-05 03:12:29], id: 3, title: "U2 - Achtung Baby on CD"}])
+
+* Chapter 5
+  Umbrella applications have other applications within them.
+
+  The umbrella app has a project function but no application
+  function. The inner application has an application function that
+  defines what needs to be run for it to work.
+
+  #+begin_src elixir
+    def project do
+      [
+        app: :auction, # Name of the app
+        version: "0.1.0",
+        build_path: "../../_build",
+        config_path: "../../config/config.exs",
+        deps_path: "../../deps",
+        lockfile: "../../mix.lock",
+        elixir: "~> 1.12",
+        start_permanent: Mix.env() == :prod,
+        deps: deps() # Meant to be a list of tuples.
+      ]
+    end
+  #+end_src
+
+  application function -> app file
+
+  #+begin_src elixir
+    def application do
+      [
+        extra_applications: [:logger], # Dependencies
+        mod: {Auction.Application, []} # Module callback; called when the
+                                       # app is run. This requires
+                                       # Auction.Application.start/2 to be
+                                       # defined.
+      ]
+    end
+  #+end_src
+
+  The app file tells the VM what is needed for the application to run,
+  including dependency applications that need to be run before it.
+
+  So I can define a bunch of BEAM apps, list them as dependencies in a
+  DAG and then run the final one; that will compile everything and run
+  the app.
+
+  To define an in-umbrella dependency which is not an "app", use the
+  =in_umbrella= key in the deps tuples.

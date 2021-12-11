@@ -3,16 +3,19 @@ defmodule Auction do
   Documentation for `Auction`.
   """
 
-  @doc """
-  Hello world.
+  alias Auction.{FakeRepo, Item}
 
-  ## Examples
+  @repo FakeRepo
 
-      iex> Auction.hello()
-      :world
+  def list_items do
+    @repo.all(Item)
+  end
 
-  """
-  def hello do
-    :world
+  def get_item(id) do
+    @repo.get!(Item, id)
+  end
+
+  def get_item_by(attrs) do
+    @repo.get_by(Item, attrs)
   end
 end
