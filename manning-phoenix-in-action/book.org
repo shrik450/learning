@@ -687,3 +687,104 @@
 
   To define an in-umbrella dependency which is not an "app", use the
   =in_umbrella= key in the deps tuples.
+
+* Chapter 6
+  Oh we're setting phoenix up inside the umbrella.
+
+  I got an error setting up phoenix, and it asked me to add pubsub to
+  the supervision tree :thinking:
+
+  I got this nasty exception:
+
+  #+begin_src text
+  14:09:31.499 [error] GenServer #PID<0.681.0> terminating
+  ** (ArgumentError) unknown registry: AuctionWeb.PubSub
+    (elixir 1.12.3) lib/registry.ex:1332: Registry.info!/1
+    (elixir 1.12.3) lib/registry.ex:985: Registry.register/3
+    (phoenix_pubsub 2.0.0) lib/phoenix/pubsub.ex:117: Phoenix.PubSub.subscribe/3
+    (phoenix 1.6.4) lib/phoenix/channel/server.ex:421: Phoenix.Channel.Server.init_join/3
+    (phoenix 1.6.4) lib/phoenix/channel/server.ex:380: Phoenix.Channel.Server.channel_join/4
+    (phoenix 1.6.4) lib/phoenix/channel/server.ex:300: Phoenix.Channel.Server.handle_info/2
+  #+end_src
+
+  But I was able to fix it. Basically, in the Application.start/2
+  function, you define the child processes. For a freshly initialized
+  web-only phoenix application, it looks like:
+
+  #+begin_src elixir
+    @impl true
+    def start(_type, _args) do
+      children = [
+        # Start the Telemetry supervisor
+        AuctionWeb.Telemetry,
+        # Start the Endpoint (http/https)
+        AuctionWeb.Endpoint
+        # Start a worker by calling: AuctionWeb.Worker.start_link(arg)
+        # {AuctionWeb.Worker, arg}
+      ]
+
+      # See https://hexdocs.pm/elixir/Supervisor.html
+      # for other strategies and supported options
+      opts = [strategy: :one_for_one, name: AuctionWeb.Supervisor]
+      Supervisor.start_link(children, opts)
+    end
+  #+end_src
+
+  This starts the supervision tree for this app. I was confused for a
+  good bit because I thought the umbrella would define the supervision
+  tree for the app; clearly, the umbrella isn't an app and therefore
+  can't be run by itself. One of the apps in the umbrella will have to
+  do that for it.
+
+  So to make the phx pubsub work, I just need to:
+
+  #+begin_src elixir
+    def start(_type, _args) do
+      children = [
+        {Phoenix.PubSub, name: AuctionWeb.PubSub},
+        # ... the res is as it was.
+    end
+  #+end_src
+
+  This clears the exception :tada:
+
+** Comprehensions
+   Comprehensions are a pull-based system for routing to add on to
+   =Enum='s methods. The key feature is that you can pattern match and
+   guard clause in the comprehension definition /and/ you can have
+   multiple comprehension definitions, like this:
+
+   #+begin_src elixir
+     dirs = ["a", "b"]
+
+     for dir <- dirs,
+       file <- File.ls!(dir),
+       path = Path.join(dir, file),
+       File.regular?(path) do
+         File.stat!(path).size
+     end
+   #+end_src
+
+   This is a bit confusing at times because I'm not sure what comes
+   after a ,. It could be another comprehension def or a guard
+   clause - but is any expression a guard? So =path = Path.join(dir,
+   file)= is also a guard but because it evaluates to a truthy value
+   it's fine?
+
+   Also it looks like heex templates prefer comprehensions?
+
+   #+begin_src elixir
+     # This
+     <%= Enum.map @items, fn item -> %>
+       <li>
+         <strong><%= item.title %></strong>: <%= item.description %>
+       </li>
+     <% end %>
+
+     # Is equivalent to
+     <%= for item <- @items do %>
+       <li>
+         <strong><%= item.title %></strong>: <%= item.description %>
+       </li>
+     <% end %>
+   #+end_src
