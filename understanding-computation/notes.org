@@ -1,0 +1,172 @@
+#+TITLE: Understanding Computation
+
+#+PROPERTY: header-args :session
+#+PROPERTY: header-args :results output
+
+Note: I started this book before I used org mode, and so the first
+three chapters of my notes and practical work are in markdown and ruby
+code in subdirectories.
+
+* Chapter 4
+
+** Motivation
+- Consider the task of accepting strings with perfectly balanced
+  parentheses. This cannot be done by finite automata, which fails
+  when having to accept inputs which are arbitrary levels deep.
+- Finite Automata must have a /finite/ number of states, which means
+  that they can't process inputs that need to keep track of an
+  arbitrary amount of data.
+- To solve this, we need to keep track of the current *nesting
+  level* - how many brackets in we are.
+
+** Pushdown
+- An FSA with a stack attached to it is called a *pushdown automaton*
+  (PDA).
+- Deterministic PDAs are DPDAs.
+- For ex, the matcher for balanced parantheses can push onto the stack
+  every time it encounters a ( and pop from it every time it
+  encounters a ).
+
+*** Pushdown Rules
+- The pushdown automaton must be capable of changing state based on
+  the stack, or the input, or both. Therefore, its rules are a bit
+  more complicated.
+- Each rule includes:
+  1. The initial state;
+  2. The input (optional);
+  3. The character to be popped from the stack (required!);
+  4. The next state;
+  5. The character(s) to be pushed onto the stack.
+
+  Therefore, the PDA /always/ pops something from the stack and pushes
+  something onto the stack. A rule that works when there's nothing on
+  the stack pops =$=.
+  Notation: =a;b/cd= -> read a, pop b, push cd.
+
+*** Determinism
+- Principle: there should be no contradictions
+- If a rule isn't specified for an =a;b= combination, it is assumed
+  that the DPDA gets stuck, and therefore retains determinism.
+
+*** Implementation
+
+We need a stack:
+
+#+begin_src ruby :session
+  class Stack < Struct.new(:contents)
+    def push(character)
+      Stack.new([character] + contents)
+    end
+
+    def pop
+      Stack.new(contents.drop(1))
+    end
+
+    # I don't like keeping stacks in this direction :'(
+    def top
+      contents.first
+    end
+
+    def inspect
+      # The stack's inner state shouldn't be visible :)
+      "#<Stack (#{top})[...]>"
+    end
+  end
+#+end_src
+
+#+RESULTS:
+
+#+begin_src ruby :session
+  # God bless p
+  stack = p Stack.new(['a', 'b', 'c', 'd', 'e'])
+
+  p stack.top
+
+  p stack.pop.pop.top
+
+  p stack.push('x').push('y').top
+
+  p stack.push('x').push('y').pop.top
+#+end_src
+
+#+RESULTS:
+: #<Stack (a)[...]>
+: "a"
+: "c"
+: "y"
+: "x"
+
+A /configuration/ (not exactly the technical term) is the combination
+of state and character at the top of the stack. Essentially, the
+configuration is the state of a DPDA, but we can't say state because
+state is already defined. Therefore, a PDA moves from configuration to
+configuration.
+
+#+begin_src ruby :session
+  class PDAConfiguration < Struct.new(:state, :stack)
+  end
+#+end_src
+
+#+RESULTS:
+
+#+begin_src ruby :session
+  class PDARule < Struct.new(
+          :state,
+          :character,
+          :next_state,
+          :pop_character,
+          :push_characters
+        )
+    def applies_to?(configuration, character)
+      self.state == configuration.state &&
+        self.pop_character == configuration.stack.top &&
+        self.character == character
+    end
+  end
+#+end_src
+
+#+RESULTS:
+
+#+begin_src ruby :session
+  rule = p PDARule.new(1, '(', 2, '$', ['b', '$'])
+
+  configuration = p PDAConfiguration.new(1, Stack.new(['$']))
+
+  p rule.applies_to?(configuration, '(')
+#+end_src
+
+#+RESULTS:
+: #<struct PDARule state=1, character="(", next_state=2, pop_character="$", push_characters=["b", "$"]>
+: #<struct PDAConfiguration state=1, stack=#<Stack ($)[...]>>
+: true
+
+#+begin_src ruby :session
+  # This is why I switched to org :)
+
+  class PDARule
+    def follow(configuration)
+      PDAConfiguration.new(next_state, next_stack(configuration))
+    end
+
+    def next_stack(configuration)
+      popped_stack = configuration.stack.pop
+
+      # You wouldn't have to do this if you picked sensible directions
+      # for the stack and the representation of what's pushed :/
+      push_characters.reverse.inject(popped_stack) {|stack, character|
+        stack.push(character)
+      }
+    end
+  end
+#+end_src
+
+#+RESULTS:
+
+#+begin_src ruby :session
+  # Wouldn't you believe it, these are still in session :D
+
+  p rule.follow(configuration)
+#+end_src
+
+#+RESULTS:
+: #<struct PDAConfiguration state=2, stack=#<Stack (b)[...]>>

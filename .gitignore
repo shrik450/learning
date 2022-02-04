@@ -1,0 +1,5 @@
+# Don't want my book files getting into git ;)
+*.pdf
+
+.DS_STORE
+
