@@ -43,7 +43,7 @@ code in subdirectories.
   the stack pops =$=.
   Notation: =a;b/cd= -> read a, pop b, push cd.
 
-*** Determinism
+** Determinism
 - Principle: there should be no contradictions
 - If a rule isn't specified for an =a;b= combination, it is assumed
   that the DPDA gets stuck, and therefore retains determinism.
@@ -409,3 +409,204 @@ deterministic should include a rule about that?
 : false
 : true
 : false
+
+** Non Deterministic
+- The DPDA we've made so far is kinda lame, it doesn't really do all
+  that much with the stack.
+- More interesting uses of the stack: accept only palindromes!
+- However, we can't just match palindromes that easily, we need a
+  marker to identify the middle of the palindrome.
+  - Why? Because if we don't, how will the PDA know when to start
+    popping from the stack?
+- So we need a /truly/ free move, and a similar system to the
+  non deterministic FA: any possible state works.
+
+*** Implementation
+
+#+begin_src ruby :session
+  require 'set'
+
+  class NPDARulebook < Struct.new(:rules)
+    def next_configurations(configurations, character)
+      configurations.flat_map {|config|
+        follow_rules_for config, character
+      }.to_set
+    end
+
+    def follow_rules_for(configuration, character)
+      rules_for(configuration, character)
+        .map {|rule|
+          rule.follow configuration
+        }
+    end
+
+    def rules_for(configuration, character)
+      # I was born a filter man and I will die a filter man :)
+      rules.filter {|rule|
+        rule.applies_to? configuration, character
+      }
+    end
+  end
+#+end_src
+
+#+RESULTS:
+: (irb):572:in `<main>': [1msuperclass mismatch for class NPDARulebook ([1;4mTypeError[m[1m)[m
+: 	from /Users/shrik450/.rvm/rubies/ruby-3.1.0/lib/ruby/gems/3.1.0/gems/irb-1.4.1/exe/irb:11:in `<top (required)>'
+: 	from /Users/shrik450/.rvm/rubies/ruby-3.1.0/bin/irb:25:in `load'
+: 	from /Users/shrik450/.rvm/rubies/ruby-3.1.0/bin/irb:25:in `<main>'
+
+#+begin_src ruby :session
+  class NPDARulebook
+    def follow_free_moves(configurations)
+      # lol
+      more_configurations = next_configurations(configurations, nil)
+
+      if more_configurations.subset? configurations
+        configurations
+      else
+        follow_free_moves(configurations + more_configurations)
+      end
+    end
+  end
+#+end_src
+
+#+RESULTS:
+
+#+begin_src ruby :session
+  class NPDA < Struct.new(
+          :current_configurations,
+          :accept_states,
+          :rulebook
+        )
+    def accepting?
+      current_configurations.any? {|config|
+        accept_states.include? config.state
+      }
+    end
+
+    def read_character(character)
+      self.current_configurations =
+        rulebook.next_configurations(current_configurations, character)
+    end
+
+    def read_string(string)
+      string.chars.each do |char|
+        read_character char
+      end
+    end
+
+    def current_configurations
+      rulebook.follow_free_moves(super)
+    end
+  end
+#+end_src
+
+#+RESULTS:
+
+#+begin_src ruby :session
+  rulebook = NPDARulebook.new(
+    [
+      PDARule.new(1, 'a', 1, '$', ['a', '$']),
+      PDARule.new(1, 'a', 1, 'a', ['a', 'a']),
+      PDARule.new(1, 'a', 1, 'b', ['a', 'b']),
+      PDARule.new(1, 'b', 1, '$', ['b', '$']),
+      PDARule.new(1, 'b', 1, 'a', ['b', 'a']),
+      PDARule.new(1, 'b', 1, 'b', ['b', 'b']),
+      PDARule.new(1, nil, 2, '$', ['$']),
+      PDARule.new(1, nil, 2, 'a', ['a']),
+      PDARule.new(1, nil, 2, 'b', ['b']),
+      PDARule.new(2, 'a', 2, 'a', []),
+      PDARule.new(2, 'b', 2, 'b', []),
+      PDARule.new(2, nil, 3, '$', ['$'])
+    ]
+  )
+
+
+  configuration = PDAConfiguration.new(1, Stack.new(['$']))
+  npda = NPDA.new(Set[configuration], [3], rulebook)
+
+  p npda.accepting?
+
+  p npda.current_configurations
+
+  npda.read_string('abb')
+
+  p npda.accepting?
+
+  p npda.current_configurations
+
+  npda.read_character('a')
+
+  p npda.accepting?
+
+  p npda.current_configurations
+#+end_src
+
+#+RESULTS:
+: true
+: #<Set: {#<struct PDAConfiguration state=1, stack=#<Stack ($)[...]>>, #<struct PDAConfiguration state=2, stack=#<Stack ($)[...]>>, #<struct PDAConfiguration state=3, stack=#<Stack ($)[...]>>}>
+: false
+: #<Set: {#<struct PDAConfiguration state=1, stack=#<Stack (b)[...]>>, #<struct PDAConfiguration state=2, stack=#<Stack (a)[...]>>, #<struct PDAConfiguration state=2, stack=#<Stack (b)[...]>>}>
+: true
+: #<Set: {#<struct PDAConfiguration state=1, stack=#<Stack (a)[...]>>, #<struct PDAConfiguration state=2, stack=#<Stack ($)[...]>>, #<struct PDAConfiguration state=2, stack=#<Stack (a)[...]>>, #<struct PDAConfiguration state=3, stack=#<Stack ($)[...]>>}>
+
+#+begin_src ruby :session
+  class NPDADesign < Struct.new(
+          :start_state,
+          :bottom_character,
+          :accept_states,
+          :rulebook
+        )
+    def accepts?(string)
+      to_npda.tap {|npda|
+        npda.read_string(string).accepting?
+      }
+    end
+
+    def to_npda
+      start_stack = Stack.new([bottom_character])
+      start_configuration = PDAConfiguration.new(start_state, start_stack)
+      NPDA.new(Set[start_configuration], accept_states, rulebook)
+    end
+  end
+#+end_src
+
+#+begin_src ruby :session
+  class NPDADesign
+    # I messed this up so I have to rewrite in a new code block
+    # ;_;
+    def accepts?(string)
+      to_npda.tap { |npda| npda.read_string(string) }.accepting?
+    end
+  end
+#+end_src
+
+#+RESULTS:
+
+-
+
+#+begin_src ruby :session
+  npda_design = p NPDADesign.new(1, '$', [3], rulebook)
+
+  p npda_design.accepts?('abba')
+
+  p npda_design.accepts?('babbaabbab')
+
+  p npda_design.accepts?('abb')
+
+  p npda_design.accepts?('baabaa')
+#+end_src
+
+#+RESULTS:
+: #<struct NPDADesign start_state=1, bottom_character="$", accept_states=[3], rulebook=#<struct NPDARulebook rules=[#<struct PDARule state=1, character="a", next_state=1, pop_character="$", push_characters=["a", "$"]>, #<struct PDARule state=1, character="a", next_state=1, pop_character="a", push_characters=["a", "a"]>, #<struct PDARule state=1, character="a", next_state=1, pop_character="b", push_characters=["a", "b"]>, #<struct PDARule state=1, character="b", next_state=1, pop_character="$", push_characters=["b", "$"]>, #<struct PDARule state=1, character="b", next_state=1, pop_character="a", push_characters=["b", "a"]>, #<struct PDARule state=1, character="b", next_state=1, pop_character="b", push_characters=["b", "b"]>, #<struct PDARule state=1, character=nil, next_state=2, pop_character="$", push_characters=["$"]>, #<struct PDARule state=1, character=nil, next_state=2, pop_character="a", push_characters=["a"]>, #<struct PDARule state=1, character=nil, next_state=2, pop_character="b", push_characters=["b"]>, #<struct PDARule state=2, character="a", next_state=2, pop_character="a", push_characters=[]>, #<struct PDARule state=2, character="b", next_state=2, pop_character="b", push_characters=[]>, #<struct PDARule state=2, character=nil, next_state=3, pop_character="$", push_characters=["$"]>]>>
+: true
+: true
+: false
+: false
+
+*** Equivalence
+Unfortunately, NPDAs aren't equivalent to DPDAs as NFAs are to
+DFAs. This is because of the stack: while an NFA can be represented as
+a DFA with possible states being sets of all possible NFA states, a
+DPDA representation of an NPDA will have to simulate all possible
+stacks parallely. That's not possible.
