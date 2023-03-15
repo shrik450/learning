@@ -1,0 +1,444 @@
+#+title: Notes from "Clojure for the Brave and True"
+#+author: Shrikanth Upadhayaya
+
+* Chapter 1
+    #+BEGIN_SRC clojure :tangle ./clojure-noob/src/clojure_noob/core.clj
+(ns clojure-noob.core
+  (:gen-class))
+
+(defn -main
+  "I don't do a whole lot... yet."
+  [& args]
+  (println "I'm a little teapot!"))
+    #+END_SRC
+
+    #+RESULTS:
+    : #'clojure-noob.core/-main
+
+    #+begin_src clojure
+(-main)
+(println (+ 1 2 3 4))
+(* 1 2 3 4)
+    #+end_src
+
+    #+RESULTS:
+    : 24
+
+* Chapter 2
+#+begin_src clojure :tangle ./clojure-noob/src/clojure_noob/core.clj
+(println "Cleanliness is next to godliness")
+#+end_src
+
+#+RESULTS:
+
+#+begin_src clojure
+(defn train
+  []
+  (println "Choo choo!"))
+#+end_src
+
+#+RESULTS:
+: #'clojure-noob.core/train
+
+#+begin_src clojure
+(* 2 (+ 1 4) 3)
+
+#+end_src
+
+* Chapter 3
+** Forms
+#+begin_src clojure
+(+ 1 2 3)
+
+(str "It was the panda " "in the library " "with a dust buster")
+#+end_src
+
+#+RESULTS:
+|                                                    6 |
+| "It was the panda in the library with a dust buster" |
+
+** Control Flow
+#+begin_src clojure
+(if true
+  (do (println "Success!") "By Zeus' hammer!")
+  "By Aquaman's trident!")
+#+end_src
+
+#+RESULTS:
+: By Zeus' hammer!
+
+
+- =nil= and =false= are falsy, everything else is truthy
+- =if= can work with non-boolean expressions
+
+  #+begin_src clojure
+(or false nil "first" "second")
+
+(or false nil false nil)
+
+(and "first" "second")
+
+(and "first" nil "second")
+  #+end_src
+
+  #+RESULTS:
+  | "first"  |
+  | "second" |
+
+** Naming values with def
+#+begin_src clojure
+(def failed-protagonist-names
+  ["Larry Potter" "Doreen the Explorer" "The Incredible Bulk"])
+
+failed-protagonist-names
+#+end_src
+
+#+RESULTS:
+| #'clojure-noob.core/failed-protagonist-names                 |
+| ["Larry Potter" "Doreen the Explorer" "The Incredible Bulk"] |
+
+** Maps
+#+begin_src clojure
+; with this map
+(def my-map {:a 1 :b 2})
+
+; this
+(get my-map :a)
+
+; is equivalent to
+(my-map :a)
+
+; and
+(:a my-map)
+#+end_src
+
+#+RESULTS:
+| #'clojure-noob.core/my-map |
+|                          1 |
+|                          1 |
+|                          1 |
+
+** Special Forms
+- Special forms like =if= don't evaluate their operands before they have to be.
+- This is in contrast to other forms, which are recursively evaluated.
+
+** Function Defs
+#+begin_src clojure
+(defn x-chop
+  "Describe the kind of chop you're inflicting on someone"
+  ([name chop-type]
+   (str "I " chop-type " chop " name"! Take that!"))
+  ([name]
+   (x-chop name "karate")))
+#+end_src
+
+#+RESULTS:
+: #'clojure-noob.core/x-chop
+
+#+begin_src clojure
+(defn codger-communication
+  [whippersnapper]
+  (str "Get off my lawn, " whippersnapper "!!!"))
+
+(defn codger
+  [& whippersnappers]
+  (map codger-communication whippersnappers))
+#+end_src
+
+#+RESULTS:
+| #'clojure-noob.core/codger-communication |
+| #'clojure-noob.core/codger               |
+
+#+begin_src clojure
+(defn chooser
+  [[first-choice second-choice & unimportant-choices]]
+  (println (str "Your first choice is: " first-choice))
+  (println (str "Your second choice is: " second-choice))
+  (println (str "We're ignoring the rest of your choices. "
+                "Here they are in case you need to cry over them: "
+                (clojure.string/join ", " unimportant-choices))))
+
+#+end_src
+
+#+RESULTS:
+: #'clojure-noob.core/chooser
+
+** Anonymous functions
+- You can declare anonymous functions with =fn=
+- There's also a "reader macro" for it: =#=
+
+  Use this like: =#(* % 3)=. The % is the param. You can use %1, %2 etc.
+
+** Putting it together
+#+begin_src clojure
+(def asym-hobbit-body-parts [{:name "head" :size 3}
+                             {:name "left-eye" :size 1}
+                             {:name "left-ear" :size 1}
+                             {:name "mouth" :size 1}
+                             {:name "nose" :size 1}
+                             {:name "neck" :size 2}
+                             {:name "left-shoulder" :size 3}
+                             {:name "left-upper-arm" :size 3}
+                             {:name "chest" :size 10}
+                             {:name "back" :size 10}
+                             {:name "left-forearm" :size 3}
+                             {:name "abdomen" :size 6}
+                             {:name "left-kidney" :size 1}
+                             {:name "left-hand" :size 2}
+                             {:name "left-knee" :size 2}
+                             {:name "left-thigh" :size 4}
+                             {:name "left-lower-leg" :size 3}
+                             {:name "left-achilles" :size 1}
+                             {:name "left-foot" :size 2}])
+
+#+end_src
+
+#+RESULTS:
+: #'clojure-noob.core/asym-hobbit-body-parts
+
+#+begin_src clojure
+(defn matching-part
+  [part]
+  {:name (clojure.string/replace (:name part) #"^left-" "right-")
+   :size (:size part)})
+
+(defn symmetrize-body-parts
+  "Expects a seq of maps that have :name and :size"
+  [asym-body-parts]
+  (loop [remaining-asym-parts asym-body-parts
+         final-body-parts []]
+    (if (empty? remaining-asym-parts)
+      final-body-parts
+      (let [[part & remaining] remaining-asym-parts]
+        (recur remaining
+               (into final-body-parts
+                     (set [part (matching-part part)])))))))
+#+end_src
+
+#+RESULTS:
+| #'clojure-noob.core/matching-part         |
+| #'clojure-noob.core/symmetrize-body-parts |
+
+#+begin_src clojure
+(symmetrize-body-parts asym-hobbit-body-parts)
+#+end_src
+
+#+RESULTS:
+| :name | head            | :size |  3 |
+| :name | left-eye        | :size |  1 |
+| :name | right-eye       | :size |  1 |
+| :name | left-ear        | :size |  1 |
+| :name | right-ear       | :size |  1 |
+| :name | mouth           | :size |  1 |
+| :name | nose            | :size |  1 |
+| :name | neck            | :size |  2 |
+| :name | left-shoulder   | :size |  3 |
+| :name | right-shoulder  | :size |  3 |
+| :name | right-upper-arm | :size |  3 |
+| :name | left-upper-arm  | :size |  3 |
+| :name | chest           | :size | 10 |
+| :name | back            | :size | 10 |
+| :name | left-forearm    | :size |  3 |
+| :name | right-forearm   | :size |  3 |
+| :name | abdomen         | :size |  6 |
+| :name | left-kidney     | :size |  1 |
+| :name | right-kidney    | :size |  1 |
+| :name | left-hand       | :size |  2 |
+| :name | right-hand      | :size |  2 |
+| :name | right-knee      | :size |  2 |
+| :name | left-knee       | :size |  2 |
+| :name | right-thigh     | :size |  4 |
+| :name | left-thigh      | :size |  4 |
+| :name | right-lower-leg | :size |  3 |
+| :name | left-lower-leg  | :size |  3 |
+| :name | right-achilles  | :size |  1 |
+| :name | left-achilles   | :size |  1 |
+| :name | right-foot      | :size |  2 |
+| :name | left-foot       | :size |  2 |
+
+*** Let
+#+begin_src clojure
+(let [x 3] x) ; remember the implicit return
+
+(def dalmatian-list
+  ["Pongo" "Perdita" "Puppy 1" "Puppy 2"])
+
+(let [dalmatians (take 2 dalmatian-list)]
+  dalmatians)
+#+end_src
+
+#+RESULTS:
+| 3                                             |
+| class clojure.lang.Compiler$CompilerException |
+| class clojure.lang.Compiler$CompilerException |
+| class clojure.lang.Compiler$CompilerException |
+| #'clojure-noob.core/dalmatian-list            |
+| ("Pongo" "Perdita")                           |
+
+*** Reduce
+#+begin_src clojure
+(defn better-symmetrize-body-parts
+  "Same as symmetrize-body-parts"
+  [asym-body-parts]
+  (reduce
+   (fn [final-body-parts part]
+     (into final-body-parts (set [part (matching-part part)])))
+   []
+   asym-body-parts))
+#+end_src
+
+#+RESULTS:
+: #'clojure-noob.core/better-symmetrize-body-parts
+
+#+begin_src clojure
+(better-symmetrize-body-parts asym-hobbit-body-parts)
+#+end_src
+
+#+RESULTS:
+| :name | head            | :size |  3 |
+| :name | left-eye        | :size |  1 |
+| :name | right-eye       | :size |  1 |
+| :name | left-ear        | :size |  1 |
+| :name | right-ear       | :size |  1 |
+| :name | mouth           | :size |  1 |
+| :name | nose            | :size |  1 |
+| :name | neck            | :size |  2 |
+| :name | left-shoulder   | :size |  3 |
+| :name | right-shoulder  | :size |  3 |
+| :name | right-upper-arm | :size |  3 |
+| :name | left-upper-arm  | :size |  3 |
+| :name | chest           | :size | 10 |
+| :name | back            | :size | 10 |
+| :name | left-forearm    | :size |  3 |
+| :name | right-forearm   | :size |  3 |
+| :name | abdomen         | :size |  6 |
+| :name | left-kidney     | :size |  1 |
+| :name | right-kidney    | :size |  1 |
+| :name | left-hand       | :size |  2 |
+| :name | right-hand      | :size |  2 |
+| :name | right-knee      | :size |  2 |
+| :name | left-knee       | :size |  2 |
+| :name | right-thigh     | :size |  4 |
+| :name | left-thigh      | :size |  4 |
+| :name | right-lower-leg | :size |  3 |
+| :name | left-lower-leg  | :size |  3 |
+| :name | right-achilles  | :size |  1 |
+| :name | left-achilles   | :size |  1 |
+| :name | right-foot      | :size |  2 |
+| :name | left-foot       | :size |  2 |
+
+** Violence
+#+begin_src clojure
+(defn hit
+  [asym-body-parts]
+  (let [sym-parts (better-symmetrize-body-parts asym-body-parts)
+        body-part-size-sum (reduce + (map :size sym-parts))
+        target (rand body-part-size-sum)]
+    (loop [[part & remaining] sym-parts
+           accumulated-size (:size part)]
+      (if (> accumulated-size target)
+        part
+        (recur remaining (+ accumulated-size (:size (first remaining))))))))
+#+end_src
+
+#+RESULTS:
+: #'clojure-noob.core/hit
+
+#+begin_src clojure
+(hit asym-hobbit-body-parts)
+(hit asym-hobbit-body-parts)
+(hit asym-hobbit-body-parts)
+#+end_src
+
+#+RESULTS:
+| {:name "abdomen", :size 6} |
+| {:name "chest", :size 10}  |
+| {:name "back", :size 10}   |
+
+** Exercises
+
+*** 1
+#+begin_src clojure
+(str "a" " b " "c")
+
+(vector 1 2 3 4)
+
+(list 1 2 3 4)
+
+(hash-map :a 1 :b 2)
+
+(hash-set 1 2 1 3 4 2)
+#+end_src
+
+#+RESULTS:
+| "a b c"      |
+| [1 2 3 4]    |
+| (1 2 3 4)    |
+| {:b 2, :a 1} |
+| #{1 4 3 2}   |
+
+*** 2
+#+begin_src clojure
+(defn add-100 [num] (+ num 100))
+#+end_src
+
+#+RESULTS:
+: #'clojure-noob.core/add-100
+
+#+begin_src clojure
+(add-100 20)
+(add-100 1)
+(add-100 -50)
+(add-100 3)
+#+end_src
+
+#+RESULTS:
+| 120 |
+| 101 |
+|  50 |
+| 103 |
+
+*** 3
+#+begin_src clojure
+(defn dec-maker
+  [dec-by]
+  (fn [num] (- num dec-by)))
+#+end_src
+
+#+RESULTS:
+: #'clojure-noob.core/dec-maker
+
+#+begin_src clojure
+((dec-maker 9) 10)
+((dec-maker 3) 6)
+#+end_src
+
+#+RESULTS:
+| 1 |
+| 3 |
+
+*** 4
+#+begin_src clojure
+(defn mapset
+  [fn seq]
+  (->> seq (map fn) set))
+#+end_src
+
+#+RESULTS:
+: #'clojure-noob.core/mapset
+
+#+begin_src clojure
+(mapset inc [1 1 2 2])
+#+end_src
+
+#+RESULTS:
+: #{3 2}
+
+*** 5
+#+begin_src clojure
+(println "Yeah no")
+#+end_src
+
+#+RESULTS:
+
+* Chapter 4
