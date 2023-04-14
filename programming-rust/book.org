@@ -1,0 +1,347 @@
+#+title: Notes from "Programming Rust"
+#+author: Shrikanth Upadhayaya <shrik450@gmail.com>
+
+* Chapter 2
+** Hello
+#+begin_src rust :tangle ./chapter_2/hello/src/main.rs
+use std::str::FromStr;
+use std::env;
+
+fn main() {
+    let mut numbers = Vec::new();
+
+    for arg in env::args().skip(1) {
+        numbers.push(u64::from_str(&arg).expect("Error parsing argument"));
+    }
+
+    if numbers.len() == 0 {
+        eprintln!("Usage: gcd NUMBER ...");
+        std::process::exit(1);
+    }
+
+    let mut d = numbers[0];
+    for m in &numbers[1..] {
+        d = gcd(d, *m);
+    }
+
+    println!("The greatest common divisor of {:?} is {}", numbers, d);
+}
+#+end_src
+
+#+begin_src rust :tangle ./chapter_2/hello/src/main.rs
+fn gcd(mut n: u64, mut m: u64) -> u64 {
+    assert!(n != 0 && m != 0);
+
+    while m != 0 {
+        if m < n {
+            let t = m;
+            m = n;
+            n = t;
+        }
+
+        m = m % n;
+    }
+
+    n
+}
+#+end_src
+
+#+begin_src rust :tangle ./chapter_2/hello/src/main.rs
+#[test]
+fn test_gcd() {
+    assert_eq!(gcd(14, 15), 1);
+
+    assert_eq!(gcd(2 * 3 * 5 * 11 * 17,
+                   3 * 7 * 11 * 13 * 19),
+               3 * 11);
+}
+#+end_src
+
+- The =#[]= syntax defines an *attribute*.
+- Traits must be in scope in order to use its methods. I've used this before
+  with =JoinableIterator=.
+- Iterators are (roughly) a zero cost abstraction; the compiler can optimize
+  them.
+
+** Actix-Gcd
+#+begin_src rust :tangle ./chapter_2/actix-gcd/src/main.rs
+use actix_web::{web, App, HttpResponse, HttpServer};
+use serde::Deserialize;
+
+fn main() {
+    let server = HttpServer::new(|| {
+        App::new()
+            .route("/", web::get().to(get_index))
+            .route("/gcd", web::post().to(post_gcd))
+    });
+
+    println!("Serving on http://localhost:3000...");
+
+    server
+        .bind("127.0.0.1:3000").expect("Error binding server to address")
+        .run().expect("Error running server");
+}
+
+fn get_index() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(
+            r#"
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>GCD Calculator</title>
+                </head>
+                <body>
+                    <h1>GCD Calculator</h1>
+                    <form action="/gcd" method="POST">
+                        <input type="text" name="n" />
+                        <input type="text" name="m" />
+                        <button type="submit">Compute GCD</button>
+                    </form>
+                </body>
+            </html>
+            "#
+        )
+}
+#+end_src
+
+- The result of the closure passed to =HttpServer::new= is used by each thread
+  to determine how to respond to requests.
+
+#+begin_src rust :tangle ./chapter_2/actix-gcd/src/main.rs
+#[derive(Deserialize)]
+struct GcdParameters {
+    n: u64,
+    m: u64,
+}
+#+end_src
+
+#+begin_src rust :tangle ./chapter_2/actix-gcd/src/main.rs
+fn post_gcd(form: web::Form<GcdParameters>) -> HttpResponse {
+    if form.n == 0 || form.m == 0 {
+        return HttpResponse::BadRequest()
+            .content_type("text/html")
+            .body("Computing the GCD with zero is boring.");
+        }
+
+    let response =
+        format!("The greatest common divisor of the numbers {} and {} is <b>{}</b>\n",
+                form.n, form.m, gcd(form.n, form.m));
+
+    HttpResponse::Ok()
+        .content_type("text/html")
+        .body(response)
+}
+#+end_src
+
+#+begin_src rust :tangle ./chapter_2/actix-gcd/src/main.rs
+fn gcd(mut n: u64, mut m: u64) -> u64 {
+    assert!(n != 0 && m != 0);
+
+    while m != 0 {
+        if m < n {
+            let t = m;
+            m = n;
+            n = t;
+        }
+
+        m = m % n;
+    }
+
+    n
+}
+#+end_src
+
+** Mandelbrot
+Tangle pattern for this header: :tangle .rs./chapter_2/mandelbrot/src/main
+
+- Mandelbrot definition: For the formula $z = z^2 + c$ where $z, c \in
+  \Complex$, $c \in M$ iff $z$ does not tend to infinity starting with 0.
+
+#+begin_src rust :tangle ./chapter_2/mandelbrot/src/escape_time.rs
+use num::Complex;
+
+/// Try to determine if `c` is in the Mandelbrot set.
+pub fn escape_time(c: Complex<f64>, limit: usize) -> Option<usize> {
+    let mut z = Complex { re: 0.0, im: 0.0 };
+    for i in 0..limit {
+        if z.norm_sqr() > 4.0 {
+            return Some(i);
+        }
+        z = z * z + c;
+    }
+
+    None
+}
+#+end_src
+
+#+begin_src rust :tangle ./chapter_2/mandelbrot/src/parse.rs
+use std::str::FromStr;
+use num::Complex;
+
+pub fn parse_pair<T: FromStr>(s: &str, separator: char) -> Option<(T, T)> {
+    match s.find(separator) {
+        None => None,
+        Some(index) => {
+            match (T::from_str(&s[..index]), T::from_str(&s[index + 1..])) {
+                (Ok(l), Ok(r)) => Some((l, r)),
+                _ => None,
+            }
+        }
+    }
+}
+
+pub fn parse_complex(s: &str) -> Option<Complex<f64>> {
+    match parse_pair(s, ',') {
+        Some((re, im)) => Some(Complex { re, im }),
+        None => None,
+    }
+}
+
+#[test]
+fn test_parse_pair() {
+    assert_eq!(parse_pair::<i32>("", ','), None);
+    assert_eq!(parse_pair::<i32>("10,", ','), None);
+    assert_eq!(parse_pair::<i32>(",10", ','), None);
+    assert_eq!(parse_pair::<i32>("10,20", ','), Some((10, 20)));
+    assert_eq!(parse_pair::<i32>("10,20xy", ','), None);
+    assert_eq!(parse_pair::<i32>("0.5x", 'x'), None);
+    assert_eq!(parse_pair::<f64>("0.5x1.5", 'x'), Some((0.5, 1.5)));
+}
+
+#[test]
+fn test_parse_complex() {
+    assert_eq!(parse_complex("1.25,-0.0625"), Some(Complex { re: 1.25, im: -0.0625 }));
+    assert_eq!(parse_complex(",-0.0625"), None);
+}
+#+end_src
+
+#+begin_src rust :tangle ./chapter_2/mandelbrot/src/render.rs
+use num::Complex;
+
+use crate::escape_time::escape_time;
+
+/// Maps a pixel on a bounded, 2D screen to a point on a bounded complex plane.
+pub fn pixel_to_point(bounds: (usize, usize),
+                  pixel: (usize, usize),
+                  upper_left: Complex<f64>,
+                  lower_right: Complex<f64>)
+    -> Complex<f64>
+{
+    let (width, height) = (lower_right.re - upper_left.re,
+                           upper_left.im - lower_right.im);
+    Complex {
+        re: upper_left.re + pixel.0 as f64 * width  / bounds.0 as f64,
+        im: upper_left.im - pixel.1 as f64 * height / bounds.1 as f64
+    }
+}
+
+pub fn render(
+    pixels: &mut [u8],
+    bounds: (usize, usize),
+    upper_left: Complex<f64>,
+    lower_right: Complex<f64>
+) {
+    assert!(pixels.len() == bounds.0 * bounds.1);
+
+    for row in 0..bounds.1 {
+        for column in 0..bounds.0 {
+            let point = pixel_to_point(bounds, (column, row),
+                                       upper_left, lower_right);
+            pixels[row * bounds.0 + column] =
+                match escape_time(point, 255) {
+                    None => 0,
+                    Some(count) => 255 - count as u8
+                };
+        }
+    }
+}
+
+#[test]
+fn test_pixel_to_point() {
+   assert_eq!(pixel_to_point((100, 200), (25, 175),
+                             Complex { re: -1.0, im: 1.0 },
+                             Complex { re: 1.0, im: -1.0 }),
+              Complex { re: -0.5, im: -0.75 });
+}
+#+end_src
+
+#+begin_src rust :tangle ./chapter_2/mandelbrot/src/image.rs
+use image::ColorType;
+use image::png::PNGEncoder;
+use std::fs::File;
+
+pub fn write_image(filename: &str, pixels: &[u8], bounds: (usize, usize))
+               -> Result<(), std::io::Error> {
+    let output = File::create(filename)?;
+    let encoder = PNGEncoder::new(output);
+    encoder.encode(pixels, bounds.0 as u32, bounds.1 as u32, ColorType::Gray(8))?;
+
+    Ok(())
+}
+#+end_src
+
+
+#+begin_src rust :tangle ./chapter_2/mandelbrot/src/main.rs
+mod escape_time;
+mod parse;
+mod render;
+mod image;
+
+use std::env;
+
+use crate::image::write_image;
+use render::{pixel_to_point, render};
+use parse::{parse_pair, parse_complex};
+
+fn main() {
+    let args: Vec<_> = env::args().collect();
+
+    if args.len() != 5 {
+        eprintln!("Usage: {} FILE PIXELS UPPERLEFT LOWERRIGHT", args[0]);
+        eprintln!("Example: {} mandel.png 1000x750 -1.20,0.35 -1,0.20", args[0]);
+        std::process::exit(1);
+    }
+
+    let bounds = parse_pair(&args[2], 'x')
+        .expect("error parsing image dimensions");
+    let upper_left = parse_complex(&args[3])
+        .expect("error parsing upper left corner point");
+    let lower_right = parse_complex(&args[4])
+        .expect("error parsing lower right corner point");
+
+    let mut pixels = vec![0; bounds.0 * bounds.1];
+
+    let threads = 8;
+    let rows_per_band = bounds.1 / threads + 1;
+
+    {
+        let bands: Vec<_> =
+            pixels.chunks_mut(rows_per_band * bounds.0).collect();
+        crossbeam::scope(|spawner| {
+            for (i, band) in bands.into_iter().enumerate() {
+                let top = rows_per_band * i;
+                let height = band.len() / bounds.0;
+                let band_bounds = (bounds.0, height);
+                let band_upper_left =
+                    pixel_to_point(bounds, (0, top), upper_left, lower_right);
+                let band_lower_right =
+                    pixel_to_point(bounds, (bounds.0, top + height),
+                                   upper_left, lower_right);
+
+                spawner.spawn(move |_| {
+                    render(band, band_bounds, band_upper_left, band_lower_right);
+                });
+            }
+
+        }).unwrap();
+    }
+
+    write_image(&args[1], &pixels, bounds)
+        .expect("error writing PNG file");
+}
+#+end_src
+
+- The =into_iter= here is necessary - it ensures that the thread that's
+  processing a band has full ownership of it.
