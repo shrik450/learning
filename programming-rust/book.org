@@ -345,3 +345,91 @@ fn main() {
 
 - The =into_iter= here is necessary - it ensures that the thread that's
   processing a band has full ownership of it.
+
+** QuickReplace
+Tangle pattern for this header: :tangle ./chapter_2/quickreplace/src
+
+#+begin_src rust
+use std::env;
+use text_colorizer::*;
+
+#[derive(Debug)]
+struct Arguments {
+    target: String,
+    replacement: String,
+    filename: String,
+    output: String,
+}
+
+fn print_usage() {
+    eprintln!("{} - change occurrences of a string in a file",
+              "quickreplace".green());
+    eprintln!("Usage: quickreplace <target> <replacement> <INPUT> <OUTPUT>");
+}
+
+fn parse_args() -> Arguments {
+    let args: Vec<String> = env::args().skip(1).collect();
+
+    if args.len() != 4 {
+        print_usage();
+        eprintln!("{}: wrong number of arguments (expected 4, got {})",
+                  "Error".red().bold(),
+                  args.len());
+        std::process::exit(1);
+    }
+
+    Arguments {
+        target: args[0].clone(),
+        replacement: args[1].clone(),
+        filename: args[2].clone(),
+        output: args[3].clone(),
+    }
+}
+
+fn main() {
+    let args = parse_args();
+    println!("{:?}", args);
+}
+#+end_src
+
+(Finished in main.rs because doing this with babel wasn't particularly useful.)
+
+* Chapter 3
+** Trivia for fun
+- Bools are stored in an entire byte (for pointers!) - bit pack if you want
+  "optimal" sizing and have multiple bools.
+** Numeric Ops
+- In debug builds, arithmetic operators panic on overflow. On release, they
+  wrap.
+- If you want to specify what should be done on overflow, usse:
+  1. =checked_= to get an option
+  2. =wrapping_= to wrap
+  3. =saturating_= to clamp
+  4. =overflowing_= to overflow (and get a bool that says if an overflow
+     occurred.)
+- "Default" types for numeric literals are =i32= and =f64=. The compiler
+  "prefers" these if there is ambiguitiy.
+** Char Representations
+- =b'A'= is the u8 rep of the ascii character A. Only ASCII!
+- ='\xFF'= is the char with code point 255.
+- =b'\xFF'= is the two above points combined.
+- ='\u{FFFFFF}'= is a char at the code point FFFFFF.
+- Chars can be =as='d into numbers, but the other way around requires
+  =char::from_*=
+** References
+- Basic refs: =&= pointer, either infinite immutable refs or one mutable ref.
+- Box: Allocate on heap, automatically freed when out of scope.
+- Raw pointers: =*= pointer, can only be dereferenced in =unsafe=.
+** Collection Primitives
+- Arrays: fixed size, =[T; N]=; =[V, N]= sugar for a filled array.
+- Vector: =ArrayList=; allocated on the heap.
+- Slices:
+  - A reference to a region of an array or a vec is a slice. (more generally, a
+    reference to a region of memory)
+  - Arrays are automatically converted to slices when necessary.
+** Strings
+- String Literals: enclosed in quotes, can span lines, raw with =#= for avoiding
+  escapes.
+- String: Like a =Vec<u8>= that stores unicode characters.
+- =&str=: A slice of a String.
+- =OsString= for OS string from the command line etc.
